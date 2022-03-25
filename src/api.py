@@ -1,6 +1,6 @@
-"""Example Steamship Parser Plugin.
+"""Example Steamship Tagger Plugin.
 
-In Steamship, **Parsers** are responsible for text into sentences, tokens, and tags upon those tokens using the **Steamship Block Format**.
+In Steamship, **Taggers** are responsible emitting tags that describe the **Steamship Block Format**.
 """
 
 from steamship import Block, BlockTypes, MimeTypes, SteamshipError
@@ -29,8 +29,8 @@ def _makeDocBlock(text: str, includeTokens=True) -> Block:
     return Block(text=text, type=BlockTypes.Document, children=children)
 
 
-class ParserPlugin(Parser, App):
-    """"Example Steamship Converter plugin."""
+class TaggerPlugin(Parser, App):
+    """"Example Steamship Tagger Plugin."""
 
     def run(self, request: PluginRequest[ParseRequest]) -> PluginResponse[ParseResponse]:
         """Every plugin implements a `run` function.
@@ -56,8 +56,8 @@ class ParserPlugin(Parser, App):
 
         return PluginResponse(data=ParseResponse(blocks=blocks))
 
-    @post('parse')
-    def parse(self, **kwargs) -> Response:
+    @post('tag')
+    def tag(self, **kwargs) -> Response:
         """App endpoint for our plugin.
 
         The `run` method above implements the Plugin interface for a Converter.
@@ -71,4 +71,4 @@ class ParserPlugin(Parser, App):
         return Response(json=dict_response)
 
 
-handler = create_handler(ParserPlugin)
+handler = create_handler(TaggerPlugin)
