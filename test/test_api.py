@@ -1,56 +1,37 @@
-from steamship.data.parser import ParseRequest
-from steamship.plugin.service import PluginRequest
-from steamship import BlockTypes
-from src.api import ParserPlugin
-import os
-from typing import List
+from steamship.data import TagKind
+from steamship.plugin.inputs.block_and_tag_plugin_input import BlockAndTagPluginInput
 
-__copyright__ = "Steamship"
-__license__ = "MIT"
+from api import TaggerPlugin
+from steamship import File, Block, TaskState, DocTag
+from steamship.plugin.request import PluginRequest
 
-def _read_test_file_lines(filename: str) -> List[str]:
-    folder = os.path.dirname(os.path.abspath(__file__))
-    with open(os.path.join(folder, '..', 'test_data', filename), 'r') as f:
-        return f.read().split('\n')
+from test import TEST_DATA
 
-def test_parser():
-    parser = ParserPlugin()
-    rose_lines = _read_test_file_lines('roses.txt')
-    request = PluginRequest(data=ParseRequest(
-        docs=rose_lines
-    ))
-    response = parser.run(request)
+WANT_SENTENCES = ["A Poem.", "Roses are red.", "Violets are blue.", "Sugar is sweet, and I love you."]
 
-    assert(response.error is None)
-    assert(response.data is not None)
 
-    assert (response.data.blocks is not None)
-    assert (len(response.data.blocks) == 3)
+def _read_test_file(filename: str) -> str:
+    file_path = TEST_DATA / filename
+    with open(file_path, 'r') as f:
+        return f.read()
 
-    # A Poem
-    para1 = response.data.blocks[0]
-    assert(para1.type == BlockTypes.Document)
-    assert(para1.children is not None)
-    for kit in para1.children:
-        print(kit.text)
-    assert(len(para1.children) == 1)
-    assert(para1.children[0].text == "A Poem.")
-    assert(para1.children[0].tokens is not None)
-    assert(len(para1.children[0].tokens) == 2)
-    assert(para1.children[0].type == BlockTypes.Sentence)
 
-    # Roses are red. Violets are blue.
-    para2 = response.data.blocks[1]
-    assert(para2.type == BlockTypes.Document)
-    assert(para2.children is not None)
-    assert(len(para2.children) == 2)
-    assert(para2.children[0].text == "Roses are red.")
-    assert(para2.children[1].text == "Violets are blue.")
-    assert(para2.children[1].tokens[1].text == "are")
+def test_tagger():
+    tagger = TaggerPlugin()
+    content = _read_test_file('roses.txt')
+    file = File(id="foo", blocks=[Block(text=content, tags=[])])
+    request = PluginRequest(data=BlockAndTagPluginInput(file=file))
+    response = tagger.run(request)
 
-    # Sugar is sweet, and I love you.
-    para3 = response.data.blocks[2]
-    assert(para3.children is not None)
-    assert(len(para3.children) == 1)
-    assert(para3.children[0].text == "Sugar is sweet, and I love you.")
-    assert(para3.children[0].tokens[2].text == "sweet,")
+    assert (response.status.state is TaskState.succeeded)
+    assert (response.data is not None)
+    assert (response.data.file is not None)
+    assert (response.data.file.blocks is not None)
+    assert (len(response.data.file.blocks) == 1)
+
+    tags = response.data.file.blocks[0].tags
+    assert (len(tags) == 4)
+    for tag in tags:
+        assert (tag.kind == TagKind.DOCUMENT)
+        assert (tag.name == DocTag.SENTENCE)
+        assert (content[tag.start_idx:tag.end_idx] in WANT_SENTENCES)
