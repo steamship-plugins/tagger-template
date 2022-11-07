@@ -23,10 +23,7 @@ def _sentence_tag(start_idx, end_idx: int) -> Tag.CreateRequest:
 
 
 class TaggerPlugin(Tagger):
-    """"Example Steamship Tagger Plugin."""
-
-    def config_cls(self) -> Type[Config]:
-        return Config
+    """Example Steamship Tagger Plugin."""
 
     def run(self, request: PluginRequest[BlockAndTagPluginInput]) -> InvocableResponse[BlockAndTagPluginOutput]:
         """Every plugin implements a `run` function.
