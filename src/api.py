@@ -2,73 +2,56 @@
 
 In Steamship, **Taggers** are responsible emitting tags that describe the **Steamship Block Format**.
 """
+from typing import Type
 
-from steamship import Block, BlockTypes, MimeTypes, SteamshipError
-from steamship.app import App, post, create_handler, Response
-from steamship.plugin.parser import Parser
-from steamship.data.parser import ParseResponse, ParseRequest
-from steamship.plugin.service import PluginResponse, PluginRequest
-from steamship import Token, Block
-
-def _makeSentenceBlock(sentence: str, includeTokens: bool = True) -> Block:
-    """Splits the sentence in tokens on space. Dep head of all is first token"""
-    if includeTokens:
-        tokens = [Token(text=word, parentIndex=0) for word in sentence.split(" ")]
-        return Block(type=BlockTypes.Sentence, text=sentence, tokens=tokens)
-    else:
-        return Block(type=BlockTypes.Sentence, text=sentence)
+from steamship import Block, SteamshipError, Tag, DocTag, File
+from steamship.data import TagKind
+from steamship.invocable import Config, InvocableResponse, create_handler
+from steamship.plugin.tagger import Tagger
+from steamship.plugin.inputs.block_and_tag_plugin_input import BlockAndTagPluginInput
+from steamship.plugin.outputs.block_and_tag_plugin_output import BlockAndTagPluginOutput
+from steamship.plugin.request import PluginRequest
 
 
-def _makeDocBlock(text: str, includeTokens=True) -> Block:
-    """Splits the document into sentences by assuming a period is a sentence divider."""
-    # Add the period back
-    sentences = map(lambda x: x.strip(), text.split("."))
-    sentences = list(filter(lambda s: len(s) > 0, sentences))
-    sentences = list(map(lambda s: "{}.".format(s), sentences))
-    children = [_makeSentenceBlock(sentence, includeTokens=includeTokens) for sentence in sentences]
-    return Block(text=text, type=BlockTypes.Document, children=children)
+def _sentence_tag(start_idx, end_idx: int) -> Tag.CreateRequest:
+    return Tag.CreateRequest(
+        kind=TagKind.DOCUMENT,
+        start_idx=start_idx,
+        end_idx=end_idx,
+        name=DocTag.SENTENCE,
+    )
 
 
-class TaggerPlugin(Parser, App):
-    """"Example Steamship Tagger Plugin."""
+class TaggerPlugin(Tagger):
+    """Example Steamship Tagger Plugin."""
 
-    def run(self, request: PluginRequest[ParseRequest]) -> PluginResponse[ParseResponse]:
+    def run(self, request: PluginRequest[BlockAndTagPluginInput]) -> InvocableResponse[BlockAndTagPluginOutput]:
         """Every plugin implements a `run` function.
 
-        This template plugin does an extremely simple form of text parsing:
-            - It chunks the incoming data into sentences on ANY period that it sees.
-            - It chunks each sentence into tokens on any whitespace it sees.
-            - It assigns the first token in a sentence to be the head.
+        This template plugin does an extremely simple form of text tagging. It generates tags for all sentences
+        (based on ANY period that it sees) in the text blocks it sees. It also assumes no repetition in sentences.
         """
         if request is None:
-            return Response(error=SteamshipError(message="Missing PluginRequest"))
+            return InvocableResponse(error=SteamshipError(message="Missing PluginRequest"))
 
         if request.data is None:
-            return Response(error=SteamshipError(message="Missing ParseRequest"))
+            return InvocableResponse(error=SteamshipError(message="Missing BlockAndTagPluginInput"))
 
-        if request.data.docs is None:
-            return Response(error=SteamshipError(message="Missing `docs` field in ParseRequest"))
+        if request.data.file is None:
+            return InvocableResponse(error=SteamshipError(message="Missing `file` field in BlockAndTagPluginInput"))
 
-        blocks = list(map(
-            lambda text: _makeDocBlock(text, includeTokens = request.data.includeTokens),
-            request.data.docs
-        ))
+        request_file = request.data.file
+        output = BlockAndTagPluginOutput(file=File.CreateRequest(id=request_file.id), tags=[])
+        for block in request.data.file.blocks:
+            text = block.text
+            # split on '.' to "find" the sentences, then generate text
+            sentences = [x.strip() + '.' for x in text.split(".") if len(x) > 0]
+            # assume no repetition in sentences
+            tags = [_sentence_tag(text.index(s), text.index(s) + len(s)) for s in sentences]
+            output_block = Block.CreateRequest(id=block.id, tags=tags)
+            output.file.blocks.append(output_block)
 
-        return PluginResponse(data=ParseResponse(blocks=blocks))
-
-    @post('tag')
-    def tag(self, **kwargs) -> Response:
-        """App endpoint for our plugin.
-
-        The `run` method above implements the Plugin interface for a Converter.
-        This `convert` method exposes it over an HTTP endpoint as a Steamship App.
-
-        When developing your own plugin, you can almost always leave the below code unchanged.
-        """
-        request = Parser.parse_request(request=kwargs)
-        response = self.run(request)
-        dict_response = Parser.response_to_dict(response)
-        return Response(json=dict_response)
+        return InvocableResponse(data=output)
 
 
 handler = create_handler(TaggerPlugin)
