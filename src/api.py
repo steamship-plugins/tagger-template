@@ -54,4 +54,3 @@ class TaggerPlugin(Tagger):
         return InvocableResponse(data=output)
 
 
-handler = create_handler(TaggerPlugin)
