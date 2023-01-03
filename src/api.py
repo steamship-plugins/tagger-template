@@ -6,7 +6,7 @@ from typing import Type
 
 from steamship import Block, SteamshipError, Tag, DocTag, File
 from steamship.data import TagKind
-from steamship.invocable import Config, InvocableResponse, create_handler
+from steamship.invocable import Config, InvocableResponse
 from steamship.plugin.tagger import Tagger
 from steamship.plugin.inputs.block_and_tag_plugin_input import BlockAndTagPluginInput
 from steamship.plugin.outputs.block_and_tag_plugin_output import BlockAndTagPluginOutput
